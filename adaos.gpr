@@ -1,0 +1,27 @@
+project Adaos is
+
+   for Languages use ("Ada");
+   for Source_Dirs use (".", "boot\", "processor\", "device\");
+   for Object_Dir use "objs\";
+   for Main use ("main.adb");
+
+   package Compiler is
+      for Default_Switches ("ada") use ("-O2", "-gnatp", "-gnatf", "-gnatX", "-gnatwbcfilopru", "-gnatVcdfimorst", "-gnatyacefiklnoprst");
+      for Default_Switches ("c") use ("-g");
+      for Default_Switches ("c++") use ("-g");
+   end Compiler;
+
+   package Builder is
+      for Default_Switches ("ada") use ("-a", "-s", "-gnatQ");
+   end Builder;
+
+   package Linker is
+      for Default_Switches ("ada") use ("-Ttext", "100000", "multiboot.o", "interrupts.o");
+   end Linker;
+
+   package Binder is
+      for Default_Switches ("Ada") use ("-static");
+   end Binder;
+
+end Adaos;
+

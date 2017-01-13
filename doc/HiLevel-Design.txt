@@ -1,0 +1,201 @@
+This description holds for boxes equiped with a local disk.
+For network based boot some changes are need, depending on the power of the
+bootloader, to include other basic device tasks.
+
+Also this descriptions is slightly different than the design docs made
+by Nick, but I wanted to have a starting draft and work in steps towards Nick's
+version of the design.  With starting this small design it allows us to have
+a working version quickly.
+
+Also, I don't know yet if I want the scheduler to be in the kernel executable
+or outside of it (running as a task).
+
+On a system supporting multiple execution rings I would like to use three
+(or four) of them as follows:
+     RING 0: Kernel + some drivers which need RING 0 access
+     RING 1: Subsystems (drivers, DB's??)
+     (RING 2: Non driver sub-systems, Transaction mgr's, etc., DB's??)
+     RING 3: User applications
+In a two level cpu RING 0-1 will be running in priviledge mode and RING 2-3
+will run in user mode.
+
+AdaOS will be structured as follows:
+
+      Kernel:
+		This will the part that is booted and initialsed by the
+		multiboot loader.
+		It will contain a mini version of the console driver to allow
+		the kernel to do output before the console driver can be
+		initialised and this can only be done, once the machine is
+		able to schedule tasks (in thus schedule the console task).
+		This which must be setup are processor(s) state, VM state,
+		Message exchanger,
+
+		Once the Kernel is operational it will start the various
+		driver tasks to allow it to complete the initialisation.
+		This is the secondary boot Program.
+		The task activation order is:
+		    - scheduler (if the scheduler is run outside the kernel)
+		    - console (after this point, the mini version will not
+			       be used, except in case of a panic).
+		    - keyboard
+		    - tty (will use the console and keyboard driver)
+		    - a disk driver (matching the root file system disk)
+		    - a filesystem (matching the root file system)
+		Once those tasks are operational, the kernel will read
+		the boot-script file (or whatever called) to finish the boot
+		of AdaOS. This is the Tertiary Boot initiator.
+		The boot-script should start all needed device
+		tasks, subsystems, etc and put the system in a certain
+		utilisation level (aka Unix Runlevel).
+
+		Depending on the power of the bootloader, some or none
+		device drivers will be attached to the kernel executable.
+		If the bootloader is unable to load modules seperatly, then
+		the kernel should be 'linked' with a minimal set of tasks
+		(device drivers) to allow it to boot and load the addtional
+		drivers.
+
+		This component will be doing the HAL work.
+		This is:
+		     interface with the processor for:
+			       - processor initialisation.
+			       - interrupt interception.
+			       - perform context switches.
+			       - Idle a processor (idle loop or specific
+			         APM/APIC instructions).
+		     interface with the memory hw for:
+			       - setting memory access register
+			       - accessing particular memory mapped regions
+			       - accessing IO ports
+				
+		SubSystems will register to kernel to request HAL services
+		to be handled for them.
+		For example a driver which wants to receive a particular
+		kind of interrupt will have to subscribe to the interrupt
+		handler list for that particular interrupt.
+		Or if a driver wants to have access to certain memory regions
+		or IO ports it will request it to the kernel also.
+
+		To be able to schedule a context swicth, the kernel will
+		need to have access to the various scheduling lists, to select
+		a task for scheduling.  The kernel itself will not do any
+		scheduling itself, this task is left to the scheduler task,
+		which will be the first task to be started.
+
+		This component will also be the message exchanger.
+		This implies that setting up a message route
+		(session based messaging) or sending a single message
+		will be managed by handled by the kernel.
+
+		This component will invoke all HW dependend initialisation
+		routines to setup the box in a working state.
+
+	Drivers:
+		For every kind of device we need a driver and each driver
+		will be written as a task.
+		Initially I'm thinking of using the virtual terminal setup
+		to start.  When the VGC will be available, the VGC could
+		replace the tty (on systems with a video card).
+		Eventuall we can define the class HIL (Human Interface Link)
+		which will have subclasses like keyboard, mouse, video,
+		console, etc.
+		All devices will be registered into the kernel and the kernel
+		will create device files dynamically (like the devfs in Linux).
+		This will remove the need of major/minor numbers.
+		All devices should be able to access through the network using
+		a normal filesystem and appropriate security settings.
+		This will allow a backup software to use remote tape libraries.
+
+		- console
+		- keyboard
+		- tty (virtual terminals)
+		- video (graphic cards)
+		- mouse, etc).
+		- floppy
+		- ide (disk, etc)
+		- scsi (disk, etc)
+		- sound
+		- serial
+		- parallel
+		- pcmcia
+		- network cards
+		- rtc
+		- apm
+		- irda
+		- ?? fast serial ???
+		- ...
+	
+	Storage Management:
+		- aquila
+		- cortex
+		- avarus
+		- ext2
+		- iso9600
+		- fat/vfat
+		- nfs
+		- Databases (oracle, Postgres, ...)
+		- Revision Managers (CVS, RCS, ClearCase, ...)
+		- ...
+
+	Security:
+		- uia
+		- NIS
+		- ...
+
+	Network:
+		- router
+		- portmapper
+		- Firewall
+		- remote access (login, ...)
+		- ...
+
+	Others:
+		- Printing
+		- Accouting
+		- Instrumentation (performance and other monitoring)
+		- X11
+		- Transaction managers
+		- log management
+		- ...
+
+	Special applications:
+		- mail server
+		- news server
+		- http server
+		- ...
+
+
+User identities:
+
+     Here I would like to respect the current design ASAP.
+     Initially everything will run under one user, being 0 (aka Unix root).
+     When the real uia will be available 0 means nobody.
+     All files will be owned by a real user or a special priviledge user
+     or nobody (0).
+     There will be one administrator for each machine which can allow
+     users (remote or local) to behave as an administrator.
+     Actually any real user can allow access to his account.
+     Real users should be defined as global users (means networkwide defined)
+     and a user could migrate from box to box (depending on the allow
+     settings).  For special users, only the administrator can set this.
+     Also in case of uia failures, some or all the special users, still
+     could get access to the machine using a shadow copy of the uia access
+     info.  In case of corrupted root volume, only an operator shell will
+     be launched (not the administrator one, as there is no way to identify
+     the identify of the administrator and would open a security breach).
+
+     There will also be an operator user which will not have all the
+     priviledge of the administrator, but will be able to 'manipulate'
+     the box (shutdown, (un)mount filesystems, stop/start (sub) systems, etc).
+     As for the administrator the operator can allow sub users to access that
+     account (but this has to be set by the administrator for obvious security
+     reasons).
+     
+     As specified users can create subusers, but only if their profile allows
+     it.  The security profile of that user will be a subset of the creator.
+     Every create subuser will be a distinct user.  The home directories
+     will be created under the $PARENT_HOME dictory of the creator.
+     The creator can specify a new $PARENT_HOME directory (which must be
+     under his $PARENT_HOME directory or blank (default) it and hereby
+     disallowing sub creation).

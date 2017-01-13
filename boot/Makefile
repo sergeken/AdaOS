@@ -1,0 +1,1 @@
+mutiboot.o:	multiboot.s
